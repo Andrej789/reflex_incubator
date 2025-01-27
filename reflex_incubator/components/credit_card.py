@@ -38,7 +38,8 @@ def card() -> rx.Component:
         direction="column",
     )
 
-@rx.page(route="/card", title="Credit Card")
+
+@rx.page(route="/credit_card", title="Credit Card")
 def credit_card() -> rx.Component:
     # Welcome Page (Index)
     return rx.center(
