@@ -3,243 +3,165 @@ from typing import Literal, Optional
 
 # 3rd party modules
 import reflex as rx
-from pydantic import BaseModel
-
-
-class ConnectionDefinitionModel(BaseModel):
-    connection_name: Optional[str] = None
-    username: Optional[str] = None
-    password:Optional[str] = None
-    hostname: Optional[str] = None
-    port: str = "1521"
-    type: Literal["SID", "SN"] = "SID"
-    sid: Optional[str] = None
-    service_name: Optional[str] = None
-
-    def is_valid(self) -> bool:
-        if not self.connection_name:
-            return False
-        if not self.username:
-            return False
-        if not self.password:
-            return False
-        if not self.hostname:
-            return False
-        if self.type == 'SID' and not self.sid:
-            return False
-        if self.type == 'SN' and not self.service_name:
-            return False
-        return True
 
 
 class NewConnectionFormState(rx.State):
-    is_disabled: bool = True  # If TRUE, dialog submit button is disabled otherwise enabled.
-    connection_def: ConnectionDefinitionModel = ConnectionDefinitionModel()
+    # Form fields ==============
+    connection_name: str
+    # ==========================
+    dialog_action: str # Which button (Submit, Cancel, Open) was selected on the form
+    is_dialog_open: bool = False
     type_options: list[dict[str, str]] = [
         {"key": "SID", "label": "SID"},
         {"key": "SN", "label": "Service Name"},
     ]
-    _cnt: int = 0  # FIXME: Remove - for testing purposes only.
+
+    def toggle_dialog(self) -> None:
+        """ Open or close the dialog."""
+        self.is_dialog_open = not self.is_dialog_open
     
     @rx.event
-    def handle_validation(self, value: str) -> None:
-        if self.connection_def.is_valid():
-            self.is_disabled = False
-        else:
-            self.is_disabled = True
-        self._cnt+=1
-        print(f"handle_validation {self._cnt}: {self.is_disabled}")
-        print(self.connection_def)
+    def handle_open(self) -> None:
+        """Called after pressing form trigger button."""
+        self.dialog_action = "open"
+        #self.is_dialog_open = True
+        self.toggle_dialog()
 
     @rx.event
-    def handle_submit(self, form_data: dict) -> None:
-        self.connection_def = ConnectionDefinitionModel(**form_data)
-        print(self.connection_def.connection_name)
-
-    @rx.event
-    def handle_type_select(self, value: str) -> None:
-        for option in self.type_options:
-            if option["key"] == value:
-                self.connection_def.type = option["key"]
-                break
+    def handle_submit(self) -> None:
+        """Called after pressing the Submit button."""
+        self.dialog_action = "submit"
+        self.toggle_dialog()
     
     @rx.event
-    def handle_open_change(self, value: bool) -> None:
-        print(f"Dialog open state is {value}")
+    def handle_cancel(self) -> None:
+        """Called after pressing the Cancel button."""
+        self.dialog_action = "cancel"
+        self.toggle_dialog()
+
+    @rx.var
+    def connection_name_empty(self) -> bool:
+        return not self.connection_name.strip()
 
 
 class NewConnectionForm():
 
-    def create_v1(self) -> rx.Component:
-        return rx.dialog.root(
-            rx.dialog.trigger(
-                rx.button(
-                    rx.icon("plus", size=20),
-                    rx.text("New Connection"),
+    def form_field(self, name: str, label: str, placeholder: str = "", type: str = "text", required: bool = False) -> rx.Component:
+        return rx.form.field(
+            rx.flex(
+                rx.form.label(label),
+                rx.form.control(
+                    rx.input(
+                        placeholder=placeholder,
+                        type=type,
+                    ),
+                    as_child=True,
                 ),
+                direction="column",
+                spacing="1",
             ),
-            rx.dialog.content(
-                rx.dialog.title("New Connection"),
-                rx.dialog.description("Fill the form with connection's metadata"),
-                rx.form(
+            name=name,
+            width="100%",
+        )
+
+    def create_v1(self) -> rx.Component:
+        return rx.flex(
+            rx.dialog.root(
+                rx.dialog.trigger(
+                    rx.button(
+                        rx.icon("plus", size=20),
+                        rx.text("New Connection"),
+                        on_click=NewConnectionFormState.handle_open
+                    ),
+                ),
+                rx.dialog.content(
+                    rx.hstack(
+                        rx.badge(
+                            rx.icon(tag="file-plus", size=48),
+                            radius="full",
+                            padding="0.65rem",
+                        ),
+                        rx.vstack(
+                            rx.dialog.title(
+                                "New Connection", 
+                                style={"margin-top": "10px", "margin-bottom": "0px", "padding-bottom": "0px"},
+                            ),
+                            rx.dialog.description(
+                                "Fill the form with connection's metadata", 
+                                style={"margin-top": "0px", "padding-top": "0px"},
+                            ),
+                        ),
+                    ),
                     rx.vstack(
-                        # ===  Connection name  =======================================================
-                        rx.vstack(
-                            rx.text.strong(
-                                "Connection Name",
-                                rx.text.span(" *", color=rx.color("red", 9)),
-                            ),
-                            rx.input(
-                                name="connection_name",
-                                required=True,
-                                on_blur=NewConnectionFormState.handle_validation,
-                            ),
-                            spacing="0",
-                            width="100%",
-                            align="stretch",
-                        ),
-                        # ===  Username  ==============================================================
-                        rx.vstack(
-                            rx.text.strong(
-                                "Username",
-                                rx.text.span(" *", color=rx.color("red", 9)),
-                            ),
-                            rx.input(
-                                name="username",
-                                required=True,
-                                on_blur=NewConnectionFormState.handle_validation,
-                            ),
-                            spacing="0",
-                            width="100%",
-                            align="stretch",
-                        ),
-                        # ===  Password  ==============================================================
-                        rx.vstack(
-                            rx.text.strong(
-                                "Password",
-                                rx.text.span(" *", color=rx.color("red", 9)),
-                            ),
-                            rx.input(
-                                name="password",
-                                type="password",
-                                required=True,
-                                on_blur=NewConnectionFormState.handle_validation,
-                            ),
-                            spacing="0",
-                            width="100%",
-                            align="stretch",
-                        ),
-                        # ===  Hostname  ==============================================================
-                        rx.vstack(
-                            rx.text.strong(
-                                "Hostname",
-                                rx.text.span(" *", color=rx.color("red", 9)),
-                            ),
-                            rx.input(
-                                name="hostname",
-                                required=True,
-                                on_blur=NewConnectionFormState.handle_validation,
-                            ),
-                            spacing="0",
-                            width="100%",
-                            align="stretch",
-                        ),
-                        # ===  Port  ==================================================================
-                        rx.vstack(
-                            rx.text.strong(
-                                "Port"
-                            ),
-                            rx.input(
-                                name="port",
-                                default_value="1521",
-                                required=True,
-                                on_blur=NewConnectionFormState.handle_validation,
-                            ),
-                            spacing="0",
-                            width="100%",
-                            align="stretch",
-                        ),
-                        # ===  Type  ==================================================================
-                        rx.hstack(
-                            rx.vstack(
-                                rx.text.strong(
-                                    "Type"
+                        rx.form.root(
+                            rx.flex(
+                                # ===  Connection name  ===========================================
+                                rx.form.field(
+                                    rx.flex(
+                                        rx.form.label("Connection Name"),
+                                        rx.form.control(
+                                            rx.input(
+                                                name="connection_name",
+                                                placeholder="Enter connection name",
+                                                type="text",
+                                                required=True,
+                                                on_change=NewConnectionFormState.set_connection_name,
+                                            ),
+                                            as_child=True,
+                                        ),
+                                        rx.cond(
+                                            NewConnectionFormState.connection_name_empty,
+                                            rx.form.message(
+                                                "Connection name cannot be empty",
+                                                color=rx.color("red", 10),
+                                            ),
+                                        ),
+                                        direction="column",
+                                        spacing="1",
+                                    ),
+                                    name="connection_name",
+                                    width="100%",
                                 ),
-                                rx.select.root(
-                                    rx.select.trigger(),
-                                    rx.select.content(
-                                        rx.foreach(
-                                            NewConnectionFormState.type_options,
-                                            lambda option: rx.select.item(option["label"], value=option["key"]),
+                                style={"margin-bottom": "10px"},
+                            ),
+                            # ===  Buttons  =======================================================
+                            rx.flex(
+                                rx.dialog.close(
+                                    rx.button(
+                                        "Cancel",
+                                        on_click=NewConnectionFormState.handle_cancel,
+                                        variant="soft",
+                                        color_scheme="gray",
+                                        min_width="120px",
+                                    ),
+                                ),
+                                rx.dialog.close(
+                                    rx.form.submit(
+                                        rx.button(
+                                            "Submit",
+                                            on_click=NewConnectionFormState.handle_submit,
+                                            type="submit",
+                                            min_width="120px",
                                         ),
                                     ),
-                                    name="type",
-                                    on_change=NewConnectionFormState.handle_type_select,
-                                    default_value="SID",
-                                    width="100%",
                                 ),
-                                spacing="0",
+                                spacing="3",
+                                direction="row",
+                                justify="end",
                             ),
-                            # ===  SID or SN  =========================================================
-                            rx.match(
-                                NewConnectionFormState.connection_def.type,
-                                ("SID", rx.vstack(
-                                    rx.text.strong(
-                                        "SID",
-                                        rx.text.span(" *", color=rx.color("red", 9)),
-                                    ),
-                                    rx.input(
-                                        name="sid",
-                                        required=True,
-                                        on_blur=NewConnectionFormState.handle_validation,
-                                    ),
-                                    spacing="0",
-                                    width="100%",
-                                    align="stretch",
-                                )),
-                                ("SN", rx.vstack(
-                                    rx.text.strong(
-                                        "Service Name",
-                                        rx.text.span(" *", color=rx.color("red", 9)),
-                                    ),
-                                    rx.input(
-                                        name="sn",
-                                        required=True,
-                                        on_blur=NewConnectionFormState.handle_validation,
-                                    ),
-                                    spacing="0",
-                                    width="100%",
-                                    align="stretch",
-                                )),
-                            ),
-                            width="100%",
+                            style={"margin-top": "15px"},
                         ),
-                        rx.flex(
-                            rx.dialog.close(
-                                rx.button("Cancel", variant="soft", color_scheme="gray"),
-                            ),
-                            rx.dialog.close(
-                                rx.button("Submit", type="submit", disabled=NewConnectionFormState.is_disabled),
-                            ),
-                            spacing="3",
-                            justify="end",
-                            width="100%",
-                        ),
-                        spacing="4",
                     ),
-                    on_submit=NewConnectionFormState.handle_submit,
-                    reset_on_submit=True,
-                    padding_top="20px",
+                    max_width="450px",
                 ),
-                max_width="400px",
+                open=NewConnectionFormState.is_dialog_open
+                #on_open_change=NewConnectionFormState.handle_open_change,
             ),
-            on_open_change=NewConnectionFormState.handle_open_change,
         )
 
 @rx.page("new_connection_form", title="New Connection Form")
 def new_connection_form_page() -> rx.Component:
     return rx.center(
         NewConnectionForm().create_v1(),
-        width="100%",
         height="50vh",
     )
