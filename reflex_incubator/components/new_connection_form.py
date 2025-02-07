@@ -8,6 +8,7 @@ import reflex as rx
 class NewConnectionFormState(rx.State):
     # Form fields ==============
     connection_name: str
+    username: str
     # ==========================
     dialog_action: str # Which button (Submit, Cancel, Open) was selected on the form
     is_dialog_open: bool = False
@@ -15,6 +16,14 @@ class NewConnectionFormState(rx.State):
         {"key": "SID", "label": "SID"},
         {"key": "SN", "label": "Service Name"},
     ]
+
+    @rx.var
+    def connection_name_empty(self) -> bool:
+        return not self.connection_name.strip()
+
+    @rx.var
+    def username_empty(self) -> bool:
+        return not self.username.strip()
 
     def toggle_dialog(self) -> None:
         """ Open or close the dialog."""
@@ -24,24 +33,34 @@ class NewConnectionFormState(rx.State):
     def handle_open(self) -> None:
         """Called after pressing form trigger button."""
         self.dialog_action = "open"
-        #self.is_dialog_open = True
+        self.handle_reset()
         self.toggle_dialog()
 
     @rx.event
     def handle_submit(self) -> None:
         """Called after pressing the Submit button."""
         self.dialog_action = "submit"
-        self.toggle_dialog()
+        is_form_valid = self.handle_validation()
+        if is_form_valid:
+            self.toggle_dialog()
     
     @rx.event
     def handle_cancel(self) -> None:
         """Called after pressing the Cancel button."""
         self.dialog_action = "cancel"
         self.toggle_dialog()
+    
+    def handle_validation(self) -> bool:
+        """Validate all form fields."""
+        result = False
+        if not self.connection_name_empty and not self.username_empty:
+            result = True
+        return result
 
-    @rx.var
-    def connection_name_empty(self) -> bool:
-        return not self.connection_name.strip()
+    def handle_reset(self):
+        """Reset form fields to default state."""
+        self.connection_name = ""
+        self.username = ""
 
 
 class NewConnectionForm():
@@ -103,25 +122,55 @@ class NewConnectionForm():
                                             rx.input(
                                                 name="connection_name",
                                                 placeholder="Enter connection name",
+                                                value=NewConnectionFormState.connection_name,
                                                 type="text",
                                                 required=True,
                                                 on_change=NewConnectionFormState.set_connection_name,
                                             ),
                                             as_child=True,
                                         ),
-                                        rx.cond(
-                                            NewConnectionFormState.connection_name_empty,
-                                            rx.form.message(
-                                                "Connection name cannot be empty",
-                                                color=rx.color("red", 10),
-                                            ),
+                                        rx.form.message(
+                                            "Connection name cannot be empty",
+                                            match="valueMissing",
+                                            force_match=NewConnectionFormState.connection_name_empty,
+                                            color=rx.color("red", 10),
                                         ),
                                         direction="column",
                                         spacing="1",
                                     ),
                                     name="connection_name",
                                     width="100%",
+                                    server_invalid=NewConnectionFormState.connection_name_empty,
                                 ),
+                                # ===  User name  ===========================================------
+                                rx.form.field(
+                                    rx.flex(
+                                        rx.form.label("Username"),
+                                        rx.form.control(
+                                            rx.input(
+                                                name="username",
+                                                placeholder="Enter username",
+                                                value=NewConnectionFormState.username,
+                                                type="text",
+                                                required=True,
+                                                on_change=NewConnectionFormState.set_username,
+                                            ),
+                                            as_child=True,
+                                        ),
+                                        rx.form.message(
+                                            "Username cannot be empty",
+                                            match="valueMissing",
+                                            force_match=NewConnectionFormState.username_empty,
+                                            color=rx.color("red", 10),
+                                        ),
+                                        direction="column",
+                                        spacing="1",
+                                    ),
+                                    name="username",
+                                    width="100%",
+                                    server_invalid=NewConnectionFormState.username_empty,
+                                ),
+                                direction="column",
                                 style={"margin-bottom": "10px"},
                             ),
                             # ===  Buttons  =======================================================
@@ -154,7 +203,8 @@ class NewConnectionForm():
                     ),
                     max_width="450px",
                 ),
-                open=NewConnectionFormState.is_dialog_open
+                open=NewConnectionFormState.is_dialog_open,
+                reset_on_submit=True,
                 #on_open_change=NewConnectionFormState.handle_open_change,
             ),
         )
